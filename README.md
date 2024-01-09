@@ -5,7 +5,7 @@ Primary outcome analysis for the CHATON trial
 
 This repository includes R code to run all of the analysis for the paper:
 
-Sie et al. **zithromycin during Routine Well-Infant Visits to Prevent Death**. (_in press_)
+Sie et al. **Azithromycin during Routine Well-Infant Visits to Prevent Death**. (_in press_)
 
 This work was funded by the Bill & Melinda Gates Foundation (grant OPP1187628), and was registered under clinical trial [NCT03676764](https://clinicaltrials.gov/study/NCT03676764)
 
@@ -29,7 +29,7 @@ All analyses were run using R software version 4.3.0 on macOS Monterey using the
 
 `> sessionInfo()`
 
-`R version 4.3.0 (2023-04-21)
+`R version 4.3.2 (2023-10-31)
 
 `Platform: aarch64-apple-darwin20 (64-bit)
 
@@ -57,9 +57,9 @@ For example, in the location on your computer where you would like to clone the 
 
 2. Recreate the exact package environment using the `renv` package. 
 
-You can do this by opening the R project file ([CHATON-Primary-Analysis.Rproj](https://github.com/proctor-ucsf/CHATON-primary/blob/main/CHATON-Primary-Analysis.Rproj)) in RStudio, loading the `renv` package, and typing `renv::restore()` to restore the package environment from the projects [renv.lock](https://github.com/proctor-ucsf/CHATON-primary/blob/main/renv.lock) file. 
+You can do this by opening the R project file ([CHATON-primary.Rproj](https://github.com/proctor-ucsf/CHATON-primary/blob/main/CHATON-primary.Rproj)) in RStudio, loading the `renv` package, and typing `renv::restore()` to restore the package environment from the projects [renv.lock](https://github.com/proctor-ucsf/CHATON-primary/blob/main/renv.lock) file. 
 
-3. All of the analysis scripts should run smoothly (scripts `1-xx.Rmd` to `8-xx.Rmd`). 
+3. All of the analysis scripts should run smoothly (scripts `1-xx.Rmd` to `11-xx.Rmd`) EXCEPT for `8-CHATON-Trial-Population.Rmd`, which does a quick comparison of population characteristics with the sister trial named CHAT, and relies on a child ID link that is not based on the public IDs.  All other scripts will run smoothly. 
 
 ### Installation Guide and Instructions for Use (Docker / RStudio Server)
 
@@ -77,9 +77,9 @@ After installing Docker and (optionally) homebrew, follow these steps:
 
 2. Build a Docker Image from the repository. 
 
-For example, to create an image with the same name as the repository, from the Terminal command line:
+For example, to create an image with the same name as the repository (but docker requires lowercase names), from the Terminal command line:
 
-`docker build -t CHATON-primary  CHATON-primary/`
+`docker build --tag chaton-primary  CHATON-primary/`
 
 This will take about 30 minutes to build the image because it needs to download and install R and all of the relevant package libraries.
 
@@ -101,7 +101,7 @@ NOTE: we have not tested the above steps on a Windows or Linux desktop operating
 
 You can run the `.Rmd` notebook scripts one-by-one or you can compile [`CHATON-primary-run-all.R`](https://github.com/proctor-ucsf/CHATON-primary/blob/main/R/0-CHATON-primary-run-all.R), which is the file we used to run the final analyses (e.g., from the command line `R CMD BATCH CHATON-primary-run-all.R &`).
 
-The analyses on the above Mac desktop configuration required 17 minutes to run. 
+The analyses on the above Mac desktop configuration required 14 minutes to run. 
 
 After building an image on RStudio Server, all data processing and analyses also required about 17 minutes to run.
 
