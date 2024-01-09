@@ -1,0 +1,185 @@
+---
+title: "CHATON Trial Primary Analysis - Incidence Density (Supplemental Material)"
+subtitle: "CONFIDENTIAL. DO NOT DISTRIBUTE."
+author: "Prepared by: Joyce Hu, and Benjamin Arnold<br><br>F.I. Proctor Foundation, University of California, San Francisco"
+date: "Data Cutoff: 2023-03-08. Report Updated: `r Sys.time()`"
+output: 
+  html_document:
+    theme: default
+    highlight: default
+    code_folding: hide
+    toc: true
+    toc_depth: 2
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+knit: (function(inputFile, encoding) {
+        rmarkdown::render(inputFile, 
+                          encoding   = encoding, 
+                          output_dir = "../output"
+                          )})
+---
+# Summary
+
+The report summarizes incidence density in the CHATON trial.
+
+# Configuration
+
+```{r preamble, message = FALSE}
+#---------------------------------
+# source the project's configuration
+# file
+#---------------------------------
+library(here)
+source(here("R/0-CHATON-primary-Config.R"))
+options(knitr.kable.NA = '')
+```
+
+# Load the data
+
+Load the final population tracking dataset. This file was created by `0-CHATON-primary-data-processing.R`.
+
+```{r load the data}
+#---------------------------------
+# load the pre-processed data
+#---------------------------------
+d <- read_rds(here("data","CHATON_full_dataset_public.rds")) %>%
+  mutate(tr = factor(tr, levels = c("Placebo","Azithromycin")))
+```
+
+
+# Incidence Density
+
+```{r}
+d_pt <- d %>%
+  filter(outcome %in% c("Alive", "Death") & inwindow == 1) %>%
+  select(tr,chat_tr, outcome, death, inwindow, person_days) 
+```
+
+
+```{r}
+# Bootstrap procedure
+B <- 10000
+
+# Create an empty data frame to store the results
+bootstrap_ci <- data.frame(
+  tr = character(0),
+  lower_ci = numeric(0),
+  upper_ci = numeric(0)
+)
+
+# Define a function to compute incidence rate
+incidence_rate <- function(data) {
+  rate <- sum(data$death) / sum(data$person_days)
+  # Convert to per 1000 person-years
+  rate * 1000 * (365.25)
+}
+
+for(tr in unique(d_pt$tr)) {
+  treatment_data <- d_pt[d_pt$tr == tr, ]
+  
+  bootstrap_incidence_rates <- numeric(B)
+  for(i in 1:B) {
+    resampled_data <- treatment_data[sample(nrow(treatment_data), nrow(treatment_data), replace = TRUE), ]
+    bootstrap_incidence_rates[i] <- incidence_rate(resampled_data)
+  }
+  
+  lower_ci <- quantile(bootstrap_incidence_rates, 0.025)
+  upper_ci <- quantile(bootstrap_incidence_rates, 0.975)
+  original_ir <- incidence_rate(treatment_data)
+  
+ # Bind the results row by row
+  bootstrap_ci <- rbind(bootstrap_ci, data.frame(
+    tr = tr,
+    lower_ci = round(lower_ci,1),
+    upper_ci = round(upper_ci,1)
+  ))
+}
+
+rownames(bootstrap_ci) <- NULL
+
+
+d_pt %>%
+  group_by(tr) %>%
+  summarise(N_d = sum(death == 1),
+            py = round(sum(person_days/365.25)),
+            incidence = round(1000*N_d/py, 1)) %>%
+  inner_join(bootstrap_ci, by = "tr") %>%
+  mutate(incidence = paste0(incidence, " (",lower_ci, ", ",upper_ci, ")")) %>%
+  select(-lower_ci, -upper_ci) %>%
+  pivot_wider(names_from=tr, values_from=c("N_d", "py", "incidence")) %>%
+  select(N_d_Azithromycin, py_Azithromycin, incidence_Azithromycin,
+         N_d_Placebo, py_Placebo, incidence_Placebo
+         ) %>%
+  knitr::kable(col.names = c("N Death", "Person-Years", "Incidence (per 1,000 PY)", 
+                             "N Death", "Person-Years", "Incidence (per 1,000 PY)"),
+             caption = "Incidence rate of all-cause mortality"
+      ) %>%
+  kable_styling(bootstrap_options = "striped",full_width = TRUE) %>%
+  add_header_above(c("Azithromycin" = 3, "Placebo" = 3)) 
+```
+
+# Incidence Density by CHAT treatment
+
+```{r, message=FALSE, warning=FALSE}
+# Bootstrap procedure
+B <- 10000
+# Create an empty data frame to store the results
+bootstrap_ci_chat <- data.frame(
+  tr = character(0),
+  chat_tr = character(0),
+  lower_ci = numeric(0),
+  upper_ci = numeric(0)
+)
+
+for (tr in unique(d_pt$tr)) {
+  for (chat_tr in  unique(d_pt$chat_tr)) {
+     treatment_data <- d_pt[d_pt$tr == tr & d_pt$chat_tr == chat_tr, ]
+     bootstrap_incidence_rates <- numeric(B)
+     for(i in 1:B) {
+       resampled_data <- treatment_data[sample(nrow(treatment_data), nrow(treatment_data), replace = TRUE), ]
+       bootstrap_incidence_rates[i] <- incidence_rate(resampled_data)
+     }
+     lower_ci <- quantile(bootstrap_incidence_rates, 0.025)
+     upper_ci <- quantile(bootstrap_incidence_rates, 0.975)
+     original_ir <- incidence_rate(treatment_data)
+     
+     # Bind the results row by row
+     bootstrap_ci_chat <- rbind(bootstrap_ci_chat, data.frame(
+       tr = tr,
+       chat_tr = chat_tr,
+       lower_ci = round(lower_ci,1),
+       upper_ci = round(upper_ci,1)
+       ))
+  }
+}
+
+rownames(bootstrap_ci_chat) <- NULL
+
+d_pt %>%
+  group_by(tr, chat_tr) %>%
+  summarise(N_d = sum(death == 1),
+            py = round(sum(person_days/365.25)),
+            incidence = round(1000*N_d/py, 1)) %>%
+  inner_join(bootstrap_ci_chat, by = c("tr", "chat_tr")) %>%
+  mutate(incidence = paste0(incidence, " (",lower_ci, ", ",upper_ci, ")")) %>%
+  select(-lower_ci, -upper_ci) %>%
+  pivot_wider(names_from=tr, values_from=c("N_d", "py", "incidence")) %>%
+  select(chat_tr, 
+         N_d_Azithromycin, py_Azithromycin, incidence_Azithromycin,
+         N_d_Placebo, py_Placebo, incidence_Placebo
+         ) %>%
+  knitr::kable(col.names = c("CHAT Treatment", 
+                             "N Death", "Person-Years", "Incidence (per 1,000 PY)", 
+                             "N Death", "Person-Years", "Incidence (per 1,000 PY)"),
+             caption = "Incidence rate of all-cause mortality by CHAT treatment"
+      ) %>%
+  kable_styling(bootstrap_options = "striped",full_width = TRUE) %>%
+  add_header_above(c(" "=1, "Azithromycin" = 3, "Placebo" = 3)) 
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```

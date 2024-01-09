@@ -1,0 +1,506 @@
+---
+title: "CHATON Trial Primary Analysis - Secondary outcomes"
+subtitle: "CONFIDENTIAL. DO NOT DISTRIBUTE."
+author: "Prepared by: Joyce Hu, and Benjamin Arnold<br><br>F.I. Proctor Foundation, University of California, San Francisco"
+date: "Data Cutoff: 2023-03-08. Report Updated: `r Sys.time()`"
+output: 
+  html_document:
+    theme: default
+    highlight: default
+    code_folding: hide
+    toc: true
+    toc_depth: 2
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+knit: (function(inputFile, encoding) {
+        rmarkdown::render(inputFile, 
+                          encoding   = encoding, 
+                          output_dir = "../output"
+                          )})
+---
+# Summary
+
+The report summarizes secondary endpoints at 6 months in the CHATON trial.
+
+# Configuration
+
+```{r preamble, message = FALSE}
+#---------------------------------
+# source the project's configuration
+# file
+#---------------------------------
+library(here)
+source(here("R/0-CHATON-primary-Config.R"))
+options(knitr.kable.NA = '')
+```
+
+# Load the data
+
+Load the final population tracking dataset. This file was created by `0-CHATON-primary-data-processing.R`.
+
+```{r load the data}
+#---------------------------------
+# load the pre-processed data
+#---------------------------------
+d <- read_rds(here("data","CHATON_full_dataset_public.rds")) %>%
+  mutate(tr = factor(tr, levels = c("Placebo","Azithromycin")))
+```
+
+# Hospitalization
+
+```{r}
+# summarize Hospitalization at 6 month followup
+d_hos <- d %>%
+  mutate(hospitalized_6m = case_when(hospitalized_6m == 1 ~ "Yes", 
+                                     hospitalized_6m == 2 ~ "No", 
+                                     T ~ "Unknown", 
+                                     ),
+         hos_6m = case_when(hospitalized_6m == "Yes" ~ 1,
+                            hospitalized_6m == "No" ~ 0, 
+                            T ~ NA_real_, 
+                                     )) %>%
+  filter(inwindow == 1 & 
+           hospitalized_6m %in% c("Yes", "No"))
+
+d_hos %>%
+  mutate(hospitalized_6m = factor(hospitalized_6m, levels = c("Yes", "No"))) %>%
+  set_variable_labels(hospitalized_6m = "Any hospitalization") %>%
+  table1(~ hospitalized_6m | tr, data = .)
+```
+
+
+## Hazard ratio permutation distribution
+
+```{r}
+#-------------------------------
+# use the final child status
+# by 6 months 
+#
+# set children with Unknown status to missing
+#
+# They will thus be excluded
+# from the HR model estimates,
+# be will be _included_ in the
+# permutation test
+#-------------------------------
+model_df_hos <- d_hos %>%
+  select(id_public, tr, hos_6m, hospitalized_6m) %>%
+  mutate(tr = factor(tr, levels = c("Placebo", "Azithromycin")))
+#-------------------------------
+# run the model
+#-------------------------------
+mod_empir_hos <- glm(hos_6m ~ tr, data = model_df_hos, family = binomial(link = cloglog))
+
+# save a model summary
+mod_summary_hos <- summary(mod_empir_hos) 
+
+# save the log HR and its SE
+coef_empir_hos <- mod_summary_hos$coef[2,1]
+se_empir_hos <- mod_summary_hos$coef[2,2]
+
+# calculate the upper and lower limits on the HR ratio (coefficient from the model)
+upper_empir_hos <- exp(coef_empir_hos+(1.96*se_empir_hos)) %>% round(3)
+lower_empir_hos <- exp(coef_empir_hos-(1.96*se_empir_hos)) %>% round(3)
+coef_empir_exp_hos <- exp(coef_empir_hos) %>% round(3)
+```
+
+```{r}
+#-------------------------------
+# permute the treatment allocation and rerun the model to 
+# estimate distribution of the model coefficient under the Null
+#-------------------------------
+hos <- model_df_hos$hos_6m
+tx_alloc <- model_df_hos$tr
+
+N <- 10000
+null_vec <- foreach(simi = 1:N, .combine = rbind) %dopar% {
+  set.seed(simi)
+  
+  # pull random numbers the length of treatment vector from uniform distribution 0-1
+  reshuffle_vec <- runif(length(tx_alloc))
+  
+  # reshuffle the treatment allocation based on random numbers generated
+  shuffled_tx <- tx_alloc[order(reshuffle_vec)]
+ 
+   # subset to non-missing obs
+  hosi <- hos[!is.na(hos)]
+  shuffled_tx <- shuffled_tx[!is.na(hos)]
+  
+  # run the model on shuffled allocation
+  modi <- glm(hosi ~ shuffled_tx, family = binomial(link = "cloglog"))
+  
+  # extract and save the coefficient
+  return(modi$coefficients[2])
+  
+}
+
+#-------------------------------
+# calculate the 2-sided 
+# permutation test p-value
+#-------------------------------
+p_value_hos <- sum(abs(null_vec) > abs(coef_empir_hos)) / length(null_vec)
+
+#-------------------------------
+# plot the null distribution 
+# with the empirical value
+#-------------------------------
+df <- data.frame(null_vec=null_vec)
+ggplot(df, aes(x=null_vec)) + 
+  geom_density(color = cbpal[2], fill=cbpal[2], alpha=0.5) +
+  geom_vline(xintercept = coef_empir_hos, color="black") +
+  xlab("Null distribution of log(HR)") +
+  theme_minimal()
+```
+
+```{r}
+#-------------------------------
+# summary of children and deaths
+#-------------------------------
+df_hos <- model_df_hos %>%
+  group_by(tr) %>%
+  # tabulate deaths and total participants by arm
+  summarise(N_ch=n(), N_h=sum(hospitalized_6m == "Yes")) %>%
+  # calculate cumulative mortality
+  mutate(h_percent=percent(N_h/N_ch, accuracy = .01)) %>%
+  pivot_wider(names_from=tr, values_from=c("N_ch", "N_h", "h_percent")) %>%
+  select(N_ch_Azithromycin, N_h_Azithromycin, h_percent_Azithromycin,
+         N_ch_Placebo, N_h_Placebo, h_percent_Placebo
+         )
+
+# prepare the hazard ratio from the model and p-value
+df_hr <- data.frame(hr=paste0(sprintf("%1.2f",coef_empir_exp_hos), 
+                              " (", sprintf("%1.2f",lower_empir_hos), ", ", 
+                              sprintf("%1.2f",upper_empir_hos), ")"), 
+                    pvalue=p_value_hos)
+
+# bind everything together
+df <- bind_cols(data.frame(outcome="Any hospitalization"), df_hos, df_hr)
+
+# render table
+knitr::kable(df, 
+             digits = 2,
+             col.names = c("Outcome", "N Children", "N Hospitalization", "%", "N Children",
+                     "N Hospitalization", "%", "HR (95% CI)", "P-value*"),
+             caption = "Cumulative incidence of hospitalization by 6 months and hazard ratio (HR) for comparison between arms estimated using binomial regression with a complementary log-log link."
+      ) %>%
+  kable_styling(bootstrap_options = "striped",full_width = TRUE) %>%
+  add_header_above(c(" " = 1, "Azithromycin" = 3, "Placebo" = 3, " " = 2)) %>%
+  footnote(symbol = c("Permutation P-value (10,000 replicates)"))
+
+```
+
+# CSPS Visit
+
+```{r}
+# summarize clinic visit at 6 month followup
+d_csps <- d %>%
+  mutate(visitedcsps_6m = case_when(visitedcsps_6m == 1 ~ "Yes", 
+                               visitedcsps_6m == 2 ~ "No", 
+                               T ~ "Unknown", 
+                                     ),
+         csps_6m = case_when(visitedcsps_6m == "Yes" ~ 1,
+                            visitedcsps_6m == "No" ~ 0, 
+                            T ~ NA_real_, 
+                                     ))%>%
+  mutate() %>%
+  filter(inwindow == 1 & 
+           visitedcsps_6m %in% c("Yes", "No"))
+
+d_csps %>%
+  mutate(tr = factor(tr, levels = c("Azithromycin","Placebo")),
+         visitedcsps_6m = factor(visitedcsps_6m, levels = c("Yes", "No"))
+         ) %>%
+  set_variable_labels(visitedcsps_6m = "Any CSPS Visit") %>%
+  table1(~ visitedcsps_6m | tr, data = .)
+```
+
+## Hazard ratio permutation distribution
+
+```{r}
+#-------------------------------
+# use the final child status
+# by 6 months 
+#
+# set children with Unknown status to missing
+#
+# They will thus be excluded
+# from the HR model estimates,
+# be will be _included_ in the
+# permutation test
+#-------------------------------
+model_df_csps <- d_csps %>%
+  select(id_public, tr, csps_6m, visitedcsps_6m) %>%
+  mutate(tr = factor(tr, levels = c("Placebo", "Azithromycin")))
+#-------------------------------
+# run the model
+#-------------------------------
+mod_empir_csps <- glm(csps_6m ~ tr, data = model_df_csps, family = binomial(link = cloglog))
+
+# save a model summary
+mod_summary_csps <- summary(mod_empir_csps) 
+
+# save the log HR and its SE
+coef_empir_csps <- mod_summary_csps$coef[2,1]
+se_empir_csps <- mod_summary_csps$coef[2,2]
+
+# calculate the upper and lower limits on the HR ratio (coefficient from the model)
+upper_empir_csps <- exp(coef_empir_csps+(1.96*se_empir_csps)) %>% round(3)
+lower_empir_csps <- exp(coef_empir_csps-(1.96*se_empir_csps)) %>% round(3)
+coef_empir_exp_csps <- exp(coef_empir_csps) %>% round(3)
+```
+
+```{r}
+#-------------------------------
+# permute the treatment allocation and rerun the model to 
+# estimate distribution of the model coefficient under the Null
+#-------------------------------
+csps <- model_df_csps$csps_6m
+tx_alloc <- model_df_csps$tr
+
+N <- 10000
+null_vec <- foreach(simi = 1:N, .combine = rbind) %dopar% {
+  set.seed(simi)
+  
+  # pull random numbers the length of treatment vector from uniform distribution 0-1
+  reshuffle_vec <- runif(length(tx_alloc))
+  
+  # reshuffle the treatment allocation based on random numbers generated
+  shuffled_tx <- tx_alloc[order(reshuffle_vec)]
+ 
+   # subset to non-missing obs
+  cspsi <- csps[!is.na(csps)]
+  shuffled_tx <- shuffled_tx[!is.na(csps)]
+  
+  # run the model on shuffled allocation
+  modi <- glm(cspsi ~ shuffled_tx, family = binomial(link = "cloglog"))
+  
+  # extract and save the coefficient
+  return(modi$coefficients[2])
+  
+}
+
+#-------------------------------
+# calculate the 2-sided 
+# permutation test p-value
+#-------------------------------
+p_value_csps <- sum(abs(null_vec) > abs(coef_empir_csps)) / length(null_vec)
+
+#-------------------------------
+# plot the null distribution 
+# with the empirical value
+#-------------------------------
+df <- data.frame(null_vec=null_vec)
+ggplot(df, aes(x=null_vec)) + 
+  geom_density(color = cbpal[2], fill=cbpal[2], alpha=0.5) +
+  geom_vline(xintercept = coef_empir_csps, color="black") +
+  xlab("Null distribution of log(HR)") +
+  theme_minimal()
+```
+
+```{r}
+#-------------------------------
+# summary of children and deaths
+#-------------------------------
+df_csps <- model_df_csps %>%
+  group_by(tr) %>%
+  # tabulate deaths and total participants by arm
+  summarise(N_ch=n(), N_h=sum(visitedcsps_6m == "Yes")) %>%
+  # calculate cumulative mortality
+  mutate(h_percent=percent(N_h/N_ch, accuracy = .01)) %>%
+  pivot_wider(names_from=tr, values_from=c("N_ch", "N_h", "h_percent")) %>%
+  select(N_ch_Azithromycin, N_h_Azithromycin, h_percent_Azithromycin,
+         N_ch_Placebo, N_h_Placebo, h_percent_Placebo
+         )
+
+# prepare the hazard ratio from the model and p-value
+df_hr_csps <- data.frame(hr=paste0(sprintf("%1.2f",coef_empir_exp_csps), 
+                              " (", sprintf("%1.2f",lower_empir_csps), ", ", 
+                              sprintf("%1.2f",upper_empir_csps), ")"), 
+                    pvalue=p_value_csps)
+
+# bind everything together
+df <- bind_cols(data.frame(outcome="Any CSPS visit"), df_csps, df_hr_csps)
+
+# render table
+knitr::kable(df, 
+             digits = 2,
+             col.names = c("Outcome", "N Children", "N CSPS visit", "%", "N Children",
+                     "N CSPS visit", "%", "HR (95% CI)", "P-value*"),
+             caption = "Cumulative incidence of CSPS visit by 6 months and hazard ratio (HR) for comparison between arms estimated using binomial regression with a complementary log-log link."
+      ) %>%
+  kable_styling(bootstrap_options = "striped",full_width = TRUE) %>%
+  add_header_above(c(" " = 1, "Azithromycin" = 3, "Placebo" = 3, " " = 2)) %>%
+  footnote(symbol = c("Permutation P-value (10,000 replicates)"))
+
+``` 
+
+
+```{r}
+d_csps_reason <- d %>%
+  mutate(malaria_6m = case_when(reasoncsps_malaria_6m == 1 ~ "Yes", 
+                            reasoncsps_malaria_6m == 0 | visitedcsps_6m == 2  ~ "No", 
+                            T ~ "Unknown" 
+                                     ),
+         pneumonia_6m = case_when(reasoncsps_pneumonia_6m == 1 ~ "Yes", 
+                               reasoncsps_pneumonia_6m == 0 | visitedcsps_6m == 2 ~ "No", 
+                               T ~ "Unknown" 
+                                     ),
+         diarrhea_6m = case_when(reasoncsps_diarrhea_6m == 1 ~ "Yes",
+                            reasoncsps_diarrhea_6m == 1 | visitedcsps_6m == 2 ~ "No", 
+                            T ~ "Unknown"
+                                     ),
+         reasoncsps_malaria_6m = case_when(reasoncsps_malaria_6m == 1 ~ 1,
+                            reasoncsps_malaria_6m == 0 | visitedcsps_6m == 2 ~ 0, 
+                            T ~ 99
+                                     ),
+         reasoncsps_pneumonia_6m = case_when(reasoncsps_pneumonia_6m == 1 ~ 1,
+                            reasoncsps_pneumonia_6m == 0 | visitedcsps_6m == 2 ~ 0, 
+                            T ~ 99
+                                     ),
+         reasoncsps_diarrhea_6m = case_when(reasoncsps_diarrhea_6m == 1 ~ 1,
+                            reasoncsps_diarrhea_6m == 0 | visitedcsps_6m == 2 ~ 0, 
+                            T ~ 99
+                                     )
+         ) %>%
+  filter(inwindow == 1 & 
+           visitedcsps_6m %in% c(1, 2)) 
+
+d_csps_reason %>%
+  mutate(tr = factor(tr, levels = c("Azithromycin","Placebo")),
+         malaria_6m = factor(malaria_6m, levels = c("Yes", "No")),
+         pneumonia_6m = factor(pneumonia_6m, levels = c("Yes", "No")),
+         diarrhea_6m = factor(diarrhea_6m, levels = c("Yes", "No"))
+         ) %>%
+  set_variable_labels(malaria_6m = "CSPS Visit - malaria",
+                      pneumonia_6m = "CSPS Visit - pneumonia",
+                      diarrhea_6m = "CSPS Visit - diarrhea"
+                      ) %>%
+  table1(~ malaria_6m + pneumonia_6m + diarrhea_6m | tr, data = .)
+```
+
+
+## Hazard ratio permutation distribution
+
+```{r}
+result_df <- data.frame(
+  outcome = NULL, 
+  N_ch_Placebo = NULL, N_h_Placebo = NULL, h_percent_Placebo = NULL,
+  N_ch_Azithromycin = NULL, N_h_Azithromycin = NULL, h_percent_Azithromycin = NULL,
+  hr = NULL, 
+  pvalue = NULL
+)
+
+model_df_csps <- d_csps_reason %>%
+  select(id_public, tr, visitedcsps_6m, reasoncsps_malaria_6m, reasoncsps_pneumonia_6m, reasoncsps_diarrhea_6m)%>%
+  mutate(tr = factor(tr, levels = c("Placebo", "Azithromycin")))
+outcomes <- c("reasoncsps_malaria_6m", "reasoncsps_pneumonia_6m", "reasoncsps_diarrhea_6m")
+
+for (o in outcomes) {
+  temp <- model_df_csps %>% rename(outcome = o)
+  #-------------------------------
+  # run the model
+  #-------------------------------
+  mod_empir <- glm(outcome ~ tr, data = temp, family = binomial(link = "cloglog"))
+  # save a model summary
+  mod_summary <- summary(mod_empir) 
+
+  # save the log HR and its SE
+  coef_empir <- mod_summary$coef[2,1]
+  se_empir <- mod_summary$coef[2,2]
+  
+  # calculate the upper and lower limits on the HR ratio (coefficient from the model)
+  upper_empir <- exp(coef_empir+(1.96*se_empir)) %>% round(3)
+  lower_empir <- exp(coef_empir-(1.96*se_empir)) %>% round(3)
+  coef_empir_exp <- exp(coef_empir) %>% round(3)
+  
+  
+  #-------------------------------
+  # permute the treatment allocation and rerun the model to 
+  # estimate distribution of the model coefficient under the Null
+  #-------------------------------
+  outcome <- temp$outcome
+  tx_alloc <- temp$tr
+  
+  N <- 10000
+  null_vec <- foreach(simi = 1:N, .combine = rbind) %dopar% {
+    set.seed(simi)
+    
+    # pull random numbers the length of treatment vector from uniform distribution 0-1
+    reshuffle_vec <- runif(length(tx_alloc))
+    
+    # reshuffle the treatment allocation based on random numbers generated
+    shuffled_tx <- tx_alloc[order(reshuffle_vec)]
+   
+     # subset to non-missing obs
+    outcomei <- outcome[!is.na(outcome)]
+    shuffled_tx <- shuffled_tx[!is.na(outcome)]
+    
+    # run the model on shuffled allocation
+    modi <- glm(outcomei ~ shuffled_tx, family = binomial(link = "cloglog"))
+    
+    # extract and save the coefficient
+    return(modi$coefficients[2])
+    
+  }
+  #-------------------------------
+  # calculate the 2-sided 
+  # permutation test p-value
+  #-------------------------------
+  p_value <- sum(abs(null_vec) > abs(coef_empir)) / length(null_vec)
+  
+  #-------------------------------
+  # summary of children and deaths
+  #-------------------------------
+  summary_o <- temp %>%
+    group_by(tr) %>%
+    # tabulate deaths and total participants by arm
+    summarise(N_ch=n(), N_h=sum(outcome == 1)) %>%
+    # calculate cumulative mortality
+    mutate(h_percent=percent(N_h/N_ch, accuracy = .01)) %>%
+    pivot_wider(names_from=tr, values_from=c("N_ch", "N_h", "h_percent")) %>%
+    select(N_ch_Placebo, N_h_Placebo, h_percent_Placebo,
+           N_ch_Azithromycin, N_h_Azithromycin, h_percent_Azithromycin
+           )
+  
+  # bind everything together
+  df_o <- bind_cols(data.frame(outcome=o),
+                  summary_o,
+                  data.frame(hr=paste0(sprintf("%1.2f",coef_empir_exp), 
+                                " (", sprintf("%1.2f",lower_empir), ", ", 
+                                sprintf("%1.2f",upper_empir), ")"), 
+                             pvalue=p_value))
+  result_df <- bind_rows(result_df, df_o)
+}
+```
+
+```{r}
+#-------------------------------
+# summary of children and deaths
+#-------------------------------
+result_df$outcome <- c("CSPS malaria", "CSPS pneumonia", "CSPS diarrhea")
+
+result_df <- result_df %>%
+  select(outcome,
+         N_ch_Azithromycin, N_h_Azithromycin, h_percent_Azithromycin,
+         N_ch_Placebo, N_h_Placebo, h_percent_Placebo,
+         hr, pvalue
+         )
+# render table
+knitr::kable(result_df, 
+             digits = 2,
+             col.names = c("Outcome", "N Children", "N CSPS visit", "%", "N Children",
+                     "N CSPS visit", "%", "HR (95% CI)", "P-value*"),
+             caption = "Cumulative incidence of CSPS visit by 6 months and hazard ratio (HR) for comparison between arms estimated using binomial regression with a complementary log-log link."
+      ) %>%
+  kable_styling(bootstrap_options = "striped",full_width = TRUE) %>%
+  add_header_above(c(" " = 1, "Azithromycin" = 3, "Placebo" = 3, " " = 2)) %>%
+  footnote(symbol = c("Permutation P-value (10,000 replicates)"))
+
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```

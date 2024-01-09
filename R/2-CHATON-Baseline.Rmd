@@ -1,0 +1,105 @@
+---
+title: "CHATON Trial Primary Analysis -  Baseline Balance"
+subtitle: "CONFIDENTIAL. DO NOT DISTRIBUTE."
+author: "Prepared by: Joyce Hu, and Benjamin Arnold<br><br>F.I. Proctor Foundation, University of California, San Francisco"
+date: "Data Cutoff: 2023-03-08. Report Updated: `r Sys.time()`"
+output: 
+  html_document:
+    theme: default
+    highlight: default
+    code_folding: hide
+    toc: true
+    toc_depth: 2
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+knit: (function(inputFile, encoding) {
+        rmarkdown::render(inputFile, 
+                          encoding   = encoding, 
+                          output_dir = "../output"
+                          )})
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Summary
+
+Summarize baseline characteristics by group in the CHATON trial.
+
+# Configuration
+
+```{r preamble, message = FALSE}
+#---------------------------------
+# source the project's configuration
+# file
+#---------------------------------
+library(here)
+source(here("R/0-CHATON-primary-Config.R"))
+options(knitr.kable.NA = '')
+```
+
+# Load the data
+
+Load the final population tracking dataset. This file was created by `0-CHATON-primary-data-processing.R`.
+
+```{r load the data}
+#---------------------------------
+# load the pre-processed data
+#---------------------------------
+d <- read_rds(here("data","CHATON_full_dataset_public.rds"))
+```
+
+# CHATON Baseline Characteristics
+
+```{r}
+my.render.cont <- function(x) {
+  with(stats.apply.rounding(stats.default(x, ), digits = 2),
+       c("",
+         "median [Q1-Q3]" =
+           sprintf(paste0("%s [",Q1,", %s]"), MEDIAN,Q3)))
+}
+
+d0 <- d %>%
+  mutate(childsex = factor(childsex),
+         visittype = factor(visittype, 
+                            levels = c("BCG","PENTA 1","PENTA 2",
+                                       "MORDOR enrolling day","42-day follow up visit",
+                                       "Other")),
+         ageinweek_bl = round(ageindays_bl/7, 1),
+         weight_3800 = factor(ifelse(weight_bl < 3.8, "Weight < 3800 g", "Weight ≥ 3800 g")),
+         analyzed = factor(ifelse(outcome %in% c("Alive", "Death") & inwindow == 1, 
+                                 "Analyzed", "LTFU/Out of window"))
+         ) %>%
+  select(childsex, visittype, weight_bl, weight_3800, ageinweek_bl, district, enroll_season, tr, analyzed) 
+
+label(d0$ageinweek_bl)       <- "Age in weeks"
+label(d0$childsex)       <- "Sex"
+label(d0$weight_3800)       <- "Weight"
+label(d0$visittype)       <- "Visit type"
+label(d0$district)       <- "District"
+label(d0$enroll_season)       <- "Season of enrollment"
+
+table1(~ ageinweek_bl + childsex + weight_3800 + visittype + district + enroll_season| tr, 
+       data = d0, 
+       render.continuous=my.render.cont
+       )
+
+```
+
+# Supplemental table: By arm and by LTFU
+
+```{r}
+table1(~ ageinweek_bl + childsex + weight_3800 + visittype + district + enroll_season| tr + analyzed, 
+       data = d0, 
+       render.continuous=my.render.cont
+       )
+```
+
+
+# Session Info
+```{r session info}
+sessionInfo()
+```
+

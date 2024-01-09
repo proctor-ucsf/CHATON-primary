@@ -1,0 +1,211 @@
+---
+title: "CHATON Trial Primary Analysis - Factorial (Supplemental Material)"
+subtitle: "CONFIDENTIAL. DO NOT DISTRIBUTE."
+author: "Prepared by: Joyce Hu, and Benjamin Arnold<br><br>F.I. Proctor Foundation, University of California, San Francisco"
+date: "Data Cutoff: 2023-03-08. Report Updated: `r Sys.time()`"
+output: 
+  html_document:
+    theme: default
+    highlight: default
+    code_folding: hide
+    toc: true
+    toc_depth: 2
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+knit: (function(inputFile, encoding) {
+        rmarkdown::render(inputFile, 
+                          encoding   = encoding, 
+                          output_dir = "../output"
+                          )})
+---
+# Summary
+
+The report summarizes primary endpoint by community treatment arm assignments from CHAT trial in the CHATON trial
+
+# Configuration
+
+```{r preamble, message = FALSE}
+#---------------------------------
+# source the project's configuration
+# file
+#---------------------------------
+library(here)
+source(here("R/0-CHATON-primary-Config.R"))
+options(knitr.kable.NA = '')
+```
+
+# Load the data
+
+Load the final population tracking dataset. This file was created by `0-CHATON-primary-data-processing.R`.
+
+```{r load the data}
+#---------------------------------
+# load the pre-processed data
+#---------------------------------
+d <- read_rds(here("data","CHATON_full_dataset_public.rds")) %>%
+  mutate(tr = factor(tr, levels = c("Placebo","Azithromycin")))
+
+
+```
+
+# CHATON kids in CHAT village, in-window, excluded unknown
+
+```{r}
+#---------------------------------
+# Table by CHAT cluster treatment
+#---------------------------------
+d %>%
+  mutate(tr = factor(tr, levels = c("Azithromycin","Placebo"))) %>%
+  filter(outcome %in% c("Alive", "Death") & inwindow == 1) %>%
+  set_variable_labels(tr = "CHATON treatment",
+                      chat_tr = "CHAT treatment") %>%
+  table1(~ chat_tr | tr, data = .)
+```
+
+
+
+```{r}
+#---------------------------------
+# Prepare minimal dataset for factorial analysis
+#---------------------------------
+d_fac <- d %>%
+  filter(outcome %in% c("Alive", "Death") & 
+           inwindow == 1 &
+          chat_tr %in% c("Placebo/Not treated", "Azithromycin") ) %>%
+  mutate(outcome = factor(outcome, 
+                          levels = c('Alive', 'Death')),
+         chat_tr= factor(paste0("CHAT tx: ",chat_tr),
+                         levels = c("CHAT tx: Placebo/Not treated", "CHAT tx: Azithromycin"))
+         ) %>%
+  select(id_public, outcome, death, tr, chat_tr)
+
+#---------------------------------
+# Prepare minimal dataset for model
+#---------------------------------
+d_fac %>%
+  set_variable_labels(outcome = "Vital Status at 6 months",
+                      tr = "CHATON treatment",
+                      chat_tr = "CHAT treatment") %>%
+  table1(~ outcome | chat_tr*tr, data = .)
+
+```
+
+
+```{r}
+model_fac_mul <- glm(death ~ tr + chat_tr + tr*chat_tr, data = d_fac, family = binomial(link = "cloglog"))
+
+# Get the coefficients from the model
+coeff_fac_mul <- coef(model_fac_mul)
+
+# For CHAT tx: Azithromycin
+coef_chataz <- coeff_fac_mul["trAzithromycin"] + coeff_fac_mul["trAzithromycin:chat_trCHAT tx: Azithromycin"]
+se_chataz <- sqrt(vc <- vcov(model_fac_mul)[2, 2] + vcov(model_fac_mul)[4, 4] + 2 * vcov(model_fac_mul)[2, 4])
+hr_chataz <- exp(coef_chataz)
+upper_chataz <- exp(coef_chataz + 1.96 * se_chataz)
+lower_chataz <- exp(coef_chataz - 1.96 * se_chataz)
+
+# For CHAT tx: Placebo
+coef_chatpl <- coeff_fac_mul["trAzithromycin"]
+se_chatpl <- sqrt(vcov(model_fac_mul)[2, 2])
+hr_chatpl <- exp(coef_chatpl)
+upper_chatpl <- exp(coef_chatpl + 1.96 * se_chatpl)
+lower_chatpl <- exp(coef_chatpl - 1.96 * se_chatpl)
+
+# Round the results to 3 decimal places
+# Create a list of variables to round
+vars <- c("hr_chataz", "upper_chataz", "lower_chataz", "hr_chatpl", "upper_chatpl", "lower_chatpl")
+
+# Loop through the variables and round them to 3 decimal places
+for (var in vars) {
+  assign(var, round(get(var), 2))
+}
+
+# p value for interaction term
+p_int_mul <- round(summary(model_fac_mul)$coefficients["trAzithromycin:chat_trCHAT tx: Azithromycin", "Pr(>|z|)"],2)
+
+```
+
+
+# Summary
+
+```{r}
+#-------------------------------
+# run the model - Additive
+# family = binomial(link = "identity")
+#-------------------------------
+model_fac_add <- glm(death ~ tr + chat_tr + tr*chat_tr, data = d_fac, family = binomial(link = "identity"))
+
+# save a model summary
+coeff_fac_add <- coef(model_fac_add)
+
+# For CHAT tx: Azithromycin
+rd_chataz <- coeff_fac_add["trAzithromycin"] + coeff_fac_add["trAzithromycin:chat_trCHAT tx: Azithromycin"]
+rdse_chataz <- sqrt(vc <- vcov(model_fac_add)[2, 2] + vcov(model_fac_add)[4, 4] + 2 * vcov(model_fac_add)[2, 4])
+rdupper_chataz <- rd_chataz + 1.96 * rdse_chataz
+rdlower_chataz <- rd_chataz - 1.96 * rdse_chataz
+
+# For CHAT tx: Placebo
+rd_chatpl <- coeff_fac_add["trAzithromycin"]
+rdse_chatpl <- sqrt(vcov(model_fac_add)[2, 2])
+rdupper_chatpl <- rd_chatpl + 1.96 * rdse_chatpl
+rdlower_chatpl <- rd_chatpl - 1.96 * rdse_chatpl
+
+# Round the results to 3 decimal places
+# Create a list of variables to round
+vars <- c("rd_chataz", "rdupper_chataz", "rdlower_chataz", "rd_chatpl", "rdupper_chatpl", "rdlower_chatpl")
+
+# Loop through the variables and round them to 3 decimal places
+for (var in vars) {
+  assign(var, paste0(round(get(var)*100, 2), "%"))
+}
+# p value for interaction term
+p_int_add <- round(summary(model_fac_add)$coefficients["trAzithromycin:chat_trCHAT tx: Azithromycin", "Pr(>|z|)"],2)
+
+```
+
+```{r}
+# Generate summary for subgroup
+fac_result <- d_fac %>%
+  mutate(chat_tr = factor(chat_tr, levels = c("CHAT tx: Azithromycin", "CHAT tx: Placebo/Not treated"))) %>%
+  group_by(chat_tr) %>%
+  summarise(N_az = sum(tr == "Azithromycin"),
+            n_az = sum(tr == "Azithromycin" & death == 1),
+            p_az = percent(n_az/N_az, accuracy = .01),
+            N_pl = sum(tr == "Placebo"),
+            n_pl = sum(tr == "Placebo" & death == 1),
+            p_pl = percent(n_pl/N_pl, accuracy = .01)
+            ) %>%
+  ungroup() %>%
+  rename(subgroup = chat_tr) %>%
+  bind_cols(data.frame(
+    ratio = c(hr_chataz, hr_chatpl),        # Add the HRs for each group
+    rrlower_CI = c(lower_chataz, lower_chatpl),  # Add the lower CIs for each group
+    rrupper_CI = c(upper_chataz, upper_chatpl),
+    riskdiff = c(rd_chataz, rd_chatpl),
+    rdlower_CI = c(rdlower_chataz, rdlower_chatpl),  # Add the lower CIs for each group
+    rdupper_CI = c(rdupper_chataz, rdupper_chatpl)
+  )) %>% 
+  mutate(ratio = paste0(sprintf("%1.2f",ratio), " (", 
+                     sprintf("%1.2f",rrlower_CI), " - ", 
+                     sprintf("%1.2f",rrupper_CI), ")"),
+         riskdiff = paste0(riskdiff, " (", 
+                     rdlower_CI, " - ", 
+                     rdupper_CI, ")")
+         )%>% 
+  select(-c(rrlower_CI, rrupper_CI, rdlower_CI, rdupper_CI))
+
+knitr::kable(fac_result, 
+             digits = 2,
+             col.names = c("Subgroup", "N total", "n outcome", "%", "N total", "n outcome", "%", "HR (95% CI)*", "RD (95% CI)†") ) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c(" " = 1, "Azithromycin" = 3,  "Placebo" = 3, " " = 2)) %>%
+  footnote(symbol = c(paste0("P-value for interaction term on multiplicative scale = ", p_int_mul),
+                      paste0("P-value for interaction term on additive scale = ", p_int_add)))
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```

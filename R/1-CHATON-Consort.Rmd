@@ -1,0 +1,175 @@
+---
+title: "CHATON Trial Primary Analysis - CONSORT Participant Flow"
+subtitle: "CONFIDENTIAL. DO NOT DISTRIBUTE."
+author: "Prepared by: Joyce Hu, and Benjamin Arnold<br><br>F.I. Proctor Foundation, University of California, San Francisco"
+date: "Data Cutoff: 2023-03-08. Report Updated: `r Sys.time()`"
+output: 
+  html_document:
+    theme: default
+    highlight: default
+    code_folding: hide
+    toc: true
+    toc_depth: 2
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+knit: (function(inputFile, encoding) {
+        rmarkdown::render(inputFile, 
+                          encoding   = encoding, 
+                          output_dir = "../output"
+                          )})
+---
+
+# Summary
+
+Track participant flow in the CHATON trial.
+
+Summarize patient numbers by treatment group and phase to include in a CONSORT flow diagram.
+
+# Configuration
+
+```{r preamble, message = FALSE}
+#---------------------------------
+# source the project's configuration
+# file
+#---------------------------------
+library(here)
+source(here("R/0-CHATON-primary-Config.R"))
+options(knitr.kable.NA = '')
+```
+
+# Load the data
+
+Load the final population tracking dataset. This file was created by `0-CHATON-primary-data-processing.R`.
+
+```{r load the data}
+#---------------------------------
+# load the pre-processed data
+#---------------------------------
+d <- read_rds(here("data","CHATON_full_dataset_public.rds"))
+
+# prescreen dataset
+inelig <- read_rds(here("data","CHATON_inelig_dataset_public.rds"))
+```
+
+# CONSORT flow
+
+Participant flow for participants randomized and followed through their 14 days and 6-month visit.
+
+```{r}
+#---------------------------------
+# 0. Prescreening
+#---------------------------------
+prescreen <- inelig %>%
+  summarise(N_screen = n() + nrow(d),
+            n_excl =n(),
+            n_young = sum(too_young),
+            n_old = sum(too_old),
+            n_unreldob = sum(dob_unreliable),
+            n_nooral = sum(no_oral_feeding),
+            n_nostay6months = sum(not_stay6months),
+            n_allergy = sum(allergy),
+            n_refuse = sum(refuse)
+            ) %>%
+  t() %>%
+  as.data.frame() %>%
+  rename(Overall = V1) %>%
+  mutate(Overall = as.character(Overall))
+
+#----------------
+# 1. Allocated to treatment and administered
+#----------------
+c_0 <- d %>%
+  mutate(reason = ifelse(notadministered==1, "Vomited", 
+                         ifelse(notadministered==2, "Refusal", 
+                                "Other"))) %>%
+  group_by(tr) %>%
+  summarise(n_randomized = n(),
+            n_administered = sum(isadministered == 1, na.rm = T),
+            n_refusal=sum(reason=="Refusal", na.rm = T),
+            n_vomited=sum(reason=="Vomited", na.rm = T),
+            n_misstxform=sum(is.na(reason) & is.na(isadministered))) %>% 
+  adorn_totals("row")
+
+#----------------
+# 2. 14 day 
+#----------------
+c_14 <-d %>%
+  group_by(tr) %>%
+  summarise(n_selected_14d = sum(selected14dcheck == 1, na.rm = T),
+            n_analyzed_14d = sum(vital_14d %in% c("Alive", "Death")),
+            n_ltfu_14d = n_selected_14d - n_analyzed_14d
+            ) %>% 
+  adorn_totals("row")
+
+#----------------
+# 3. 6 Month 
+#----------------
+c_180 <- d %>% 
+  group_by(tr) %>%
+  summarise(n_analyzed_6m = sum(outcome %in% c("Alive", "Death") &
+                                  inwindow == 1),
+            n_ltfu_6m = sum(outcome == "Unknown" | is.na(outcome)), 
+            n_outwindow_6m = sum(outcome %in% c("Alive", "Death") & 
+                                   inwindow == 0, na.rm = T)
+            ) %>% 
+  adorn_totals("row")
+
+consort <- bind_rows(
+  prescreen,
+  c_0 %>% 
+  full_join(c_14, by = "tr" ) %>%
+  full_join(c_180, by = "tr" ) %>%
+  # transpose
+  t() %>% 
+  # convert 1st row (tx) to colnames 
+  row_to_names(1) %>%
+  # convert matrix output of transpose to df 
+  as.data.frame()%>% 
+  # rename Total appropriately
+  rename(Overall = Total)
+  ) %>%
+  select(Azithromycin,Placebo, Overall) %>%
+  # set column name to empty string
+  rownames_to_column(" ") %>% 
+  # rename variables for presentation
+  mutate(` ` = c("Assessed for eligibility",
+                 "Excluded",
+                 "Too young",
+                 "Too old",
+                 "Birth date source unreliable",
+                 "No oral feeding",
+                 "Not staying 6 months",
+                 "Allergy", 
+                 "Refused",
+                 "Randomized",
+                 "Administered",
+                 "Refusal",
+                 "Vomited",
+                 "Missing treatment form",
+                 "Selected",
+                 "Analyzed",
+                 "Lost to follow up/unknown vital status",
+                 "Analyzed",
+                 "Lost to follow up/unknown vital status",
+                 "Measured out of window")
+         )
+
+consort %>% 
+  knitr::kable(format = "html", digits = 0, format.args = list(big.mark = ",")
+               ) %>%
+  kable_styling(bootstrap_options = "striped") %>%
+  pack_rows("Prescreen", 1, 9) %>%
+  pack_rows("Enrollment", 10, 14) %>%    
+  pack_rows("14 days follow-up", 15, 17) %>%  
+  pack_rows("6 month follow-up", 18, 20) 
+
+```
+
+_Note: The measurement window for 6 months is age 4 months to 9 months (age 120 days to 270 days). Children measured before age 120 days or after age 270 days were excluded from the analysis._  
+
+# Session Info
+```{r session info}
+sessionInfo()
+```
+

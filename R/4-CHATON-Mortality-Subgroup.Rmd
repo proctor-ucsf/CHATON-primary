@@ -1,0 +1,339 @@
+---
+title: "CHATON Trial Primary Analysis - Subgroup Mortality"
+subtitle: "CONFIDENTIAL. DO NOT DISTRIBUTE."
+author: "Prepared by: Joyce Hu, and Benjamin Arnold<br><br>F.I. Proctor Foundation, University of California, San Francisco"
+date: "Data Cutoff: 2023-03-08. Report Updated: `r Sys.time()`"
+output: 
+  html_document:
+    theme: default
+    highlight: default
+    code_folding: hide
+    toc: true
+    toc_depth: 2
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+knit: (function(inputFile, encoding) {
+        rmarkdown::render(inputFile, 
+                          encoding   = encoding, 
+                          output_dir = "../output"
+                          )})
+---
+# Summary
+
+The report summarizes subgroup primary endpoint (cumulative incidence of mortality by 6 months) in the CHATON trial.
+
+# Configuration
+
+```{r preamble, message = FALSE}
+#---------------------------------
+# source the project's configuration
+# file
+#---------------------------------
+library(here)
+source(here("R/0-CHATON-primary-Config.R"))
+options(knitr.kable.NA = '')
+```
+
+# Load the data
+
+Load the final population tracking dataset. This file was created by `0-CHATON-primary-data-processing.R`.
+
+```{r load the data}
+#---------------------------------
+# load the pre-processed data
+#---------------------------------
+d <- read_rds(here("data","CHATON_full_dataset_public.rds")) %>%
+  mutate(tr = factor(tr, levels = c("Placebo","Azithromycin"))) %>%
+  filter(outcome %in% c("Alive", "Death") & inwindow == 1) 
+```
+
+# By Age at enrollment
+
+```{r}
+my.render.cat <- function(x) { 
+  sub('.', '.', c("", sapply(stats.default(x), 
+  function(y) with(y, sprintf("%d (%0.2f%%)", FREQ, PCT)))), fixed = TRUE) 
+}
+
+d %>%
+  set_variable_labels(outcome = "Vital Status at 6 months") %>%
+  table1(~ outcome | age_cat + tr, data = .,
+         render.categorical=my.render.cat)
+```
+
+```{r}
+model_a <- glm(death ~ tr + age_cat + age_cat*tr, data = d, family = binomial(link = "cloglog"))
+
+# Get the coefficients from the model
+coeff_a <- coef(model_a)
+
+# For 9-12week Group
+coef_9_12w <- coeff_a["trAzithromycin"] + coeff_a["trAzithromycin:age_cat9-12 weeks"]
+se_9_12w <- sqrt(vc <- vcov(model_a)[2, 2] + vcov(model_a)[4, 4] + 2 * vcov(model_a)[2, 4])
+hr_9_12w <- exp(coef_9_12w)
+upper_9_12w <- exp(coef_9_12w + 1.96 * se_9_12w)
+lower_9_12w <- exp(coef_9_12w - 1.96 * se_9_12w)
+
+# For 5-8week Group
+coef_5_8w <- coeff_a["trAzithromycin"]
+se_5_8w <- sqrt(vcov(model_a)[2, 2])
+hr_5_8w <- exp(coef_5_8w)
+upper_5_8w <- exp(coef_5_8w + 1.96 * se_5_8w)
+lower_5_8w <- exp(coef_5_8w - 1.96 * se_5_8w)
+
+# Round the results to 3 decimal places
+hr_9_12w <- round(hr_9_12w, 3)
+upper_9_12w <- round(upper_9_12w, 3)
+lower_9_12w <- round(lower_9_12w, 3)
+hr_5_8w <- round(hr_5_8w, 3)
+upper_5_8w <- round(upper_5_8w, 3)
+lower_5_8w <- round(lower_5_8w, 3)
+
+# Generate summary for agecat subgroup
+agecat_result <- d %>%
+  filter(!is.na(age_cat)) %>%
+  group_by(age_cat) %>%
+  summarise(N_pl = sum(tr == "Placebo"),
+            n_pl = sum(tr == "Placebo" & death == 1),
+            p_pl = percent(n_pl/N_pl, accuracy = .01),
+            N_az = sum(tr == "Azithromycin"),
+            n_az = sum(tr == "Azithromycin" & death == 1),
+            p_az = percent(n_az/N_az, accuracy = .01)
+            ) %>%
+  ungroup() %>%
+  rename(subgroup = age_cat) %>%
+  bind_cols(data.frame(
+    coef = c(coef_5_8w, coef_9_12w),     # Add the coefficients for each group
+    ratio = c(hr_5_8w, hr_9_12w),        # Add the HRs for each group
+    lower_CI = c(lower_5_8w, lower_9_12w),  # Add the lower CIs for each group
+    upper_CI = c(upper_5_8w, upper_9_12w)
+  ))
+
+p_int_a <- round(summary(model_a)$coefficients["trAzithromycin:age_cat9-12 weeks", "Pr(>|z|)"],2)
+```
+
+# By Child’s sex
+
+```{r}
+d %>%
+  set_variable_labels(outcome = "Vital Status at 6 months") %>%
+  table1(~ outcome | childsex + tr, data = .,
+         render.categorical=my.render.cat)
+```
+
+
+```{r}
+model_s <- glm(death ~ tr + childsex + childsex*tr, data = d, family = binomial(link = "cloglog"))
+
+# Get the coefficients from the model
+coeff_s <- coef(model_s)
+
+# For Male Group
+coef_male <- coeff_s["trAzithromycin"] + coeff_s["trAzithromycin:childsexMale"]
+se_male <- sqrt(vc <- vcov(model_s)[2, 2] + vcov(model_s)[4, 4] + 2 * vcov(model_s)[2, 4])
+hr_male <- exp(coef_male)
+upper_male <- exp(coef_male + 1.96 * se_male)
+lower_male <- exp(coef_male - 1.96 * se_male)
+
+# For Female Group
+coef_female <- coeff_s["trAzithromycin"]
+se_female <- sqrt(vcov(model_s)[2, 2])
+hr_female <- exp(coef_female)
+upper_female <- exp(coef_female + 1.96 * se_female)
+lower_female <- exp(coef_female - 1.96 * se_female)
+
+# Round the results to 3 decimal places
+hr_male <- round(hr_male, 3)
+upper_male <- round(upper_male, 3)
+lower_male <- round(lower_male, 3)
+hr_female <- round(hr_female, 3)
+upper_female <- round(upper_female, 3)
+lower_female <- round(lower_female, 3)
+
+# Generate summary for sex subgroup
+childsex_result <- d %>%
+  filter(!is.na(childsex)) %>%
+  group_by(childsex) %>%
+  summarise(N_pl = sum(tr == "Placebo"),
+            n_pl = sum(tr == "Placebo" & death == 1),
+            p_pl = percent(n_pl/N_pl, accuracy = .01),
+            N_az = sum(tr == "Azithromycin"),
+            n_az = sum(tr == "Azithromycin" & death == 1),
+            p_az = percent(n_az/N_az, accuracy = .01)
+            ) %>%
+  ungroup() %>%
+  rename(subgroup = childsex) %>%
+  bind_cols(data.frame(
+    coef = c(coef_female, coef_male),     # Add the coefficients for each group
+    ratio = c(hr_female, hr_male),        # Add the HRs for each group
+    lower_CI = c(lower_female, lower_male),  # Add the lower CIs for each group
+    upper_CI = c(upper_female, upper_male)
+  ))
+
+# p value for interaction term
+p_int_s <- round(summary(model_s)$coefficients["trAzithromycin:childsexMale", "Pr(>|z|)"],2)
+
+```
+
+# By Vaccination visit 
+
+```{r}
+d %>%
+  set_variable_labels(outcome = "Vital Status at 6 months") %>%
+  table1(~ outcome | vacc_visit + tr, data = .,
+         render.categorical=my.render.cat)
+```
+
+```{r}
+model_v <- glm(death ~ tr + vacc_visit + vacc_visit*tr, data = d, family = binomial(link = "cloglog"))
+
+# Get the coefficients from the model
+coeff_v <- coef(model_v)
+
+# For Non-vaccine Group
+coef_nonvacc <- coeff_v["trAzithromycin"] + coeff_v["trAzithromycin:vacc_visitNon-vaccine"]
+se_nonvacc <- sqrt(vc <- vcov(model_v)[2, 2] + vcov(model_v)[4, 4] + 2 * vcov(model_v)[2, 4])
+hr_nonvacc <- exp(coef_nonvacc)
+upper_nonvacc <- exp(coef_nonvacc + 1.96 * se_nonvacc)
+lower_nonvacc <- exp(coef_nonvacc - 1.96 * se_nonvacc)
+
+# For Vaccine Group
+coef_vacc <- coeff_v["trAzithromycin"]
+se_vacc <- sqrt(vcov(model_v)[2, 2])
+hr_vacc <- exp(coef_vacc)
+upper_vacc <- exp(coef_vacc + 1.96 * se_vacc)
+lower_vacc <- exp(coef_vacc - 1.96 * se_vacc)
+
+# Round the results to 3 decimal places
+hr_nonvacc <- round(hr_nonvacc, 3)
+upper_nonvacc <- round(upper_nonvacc, 3)
+lower_nonvacc <- round(lower_nonvacc, 3)
+hr_vacc <- round(hr_vacc, 3)
+upper_vacc <- round(upper_vacc, 3)
+lower_vacc <- round(lower_vacc, 3)
+
+# Generate summary for sex subgroup
+vacc_result <- d %>%
+  filter(!is.na(vacc_visit)) %>%
+  group_by(vacc_visit) %>%
+  summarise(N_pl = sum(tr == "Placebo"),
+            n_pl = sum(tr == "Placebo" & death == 1),
+            p_pl = percent(n_pl/N_pl, accuracy = .01),
+            N_az = sum(tr == "Azithromycin"),
+            n_az = sum(tr == "Azithromycin" & death == 1),
+            p_az = percent(n_az/N_az, accuracy = .01)
+            ) %>%
+  ungroup() %>%
+  rename(subgroup = vacc_visit) %>%
+  bind_cols(data.frame(
+    coef = c(coef_vacc, coef_nonvacc),     # Add the coefficients for each group
+    ratio = c(hr_vacc, hr_nonvacc),        # Add the HRs for each group
+    lower_CI = c(lower_vacc, lower_nonvacc),  # Add the lower CIs for each group
+    upper_CI = c(upper_vacc, upper_nonvacc)
+  ))
+
+# p value for interaction term
+p_int_v <- round(summary(model_v)$coefficients["trAzithromycin:vacc_visitNon-vaccine", "Pr(>|z|)"],2)
+
+```
+
+
+# By Weight
+
+```{r}
+d %>%
+  filter(!is.na(weight_3800)) %>%
+  set_variable_labels(outcome = "Vital Status at 6 months") %>%
+  table1(~ outcome | weight_3800 + tr, data = .,
+         render.categorical=my.render.cat)
+```
+```{r}
+model_w <- glm(death ~ tr + weight_3800 + weight_3800*tr, 
+               data = d %>% filter(!is.na(weight_3800)), 
+               family = binomial(link = "cloglog"))
+
+# Get the coefficients from the model
+coeff_w <- coef(model_w)
+
+# For weight>=3800 Group
+coef_above3800 <- coeff_w["trAzithromycin"] + coeff_w["trAzithromycin:weight_3800Weight ≥ 3800 g"]
+se_above3800 <- sqrt(vc <- vcov(model_w)[2, 2] + vcov(model_w)[4, 4] + 2 * vcov(model_w)[2, 4])
+hr_above3800 <- exp(coef_above3800)
+upper_above3800 <- exp(coef_above3800 + 1.96 * se_above3800)
+lower_above3800 <- exp(coef_above3800 - 1.96 * se_above3800)
+
+# For weight < 3800 Group
+coef_below3800 <- coeff_w["trAzithromycin"]
+se_below3800 <- sqrt(vcov(model_w)[2, 2])
+hr_below3800 <- exp(coef_below3800)
+upper_below3800 <- exp(coef_below3800 + 1.96 * se_below3800)
+lower_below3800 <- exp(coef_below3800 - 1.96 * se_below3800)
+
+# Round the results to 3 decimal places
+hr_above3800 <- round(hr_above3800, 3)
+upper_above3800 <- round(upper_above3800, 3)
+lower_above3800 <- round(lower_above3800, 3)
+hr_below3800 <- round(hr_below3800, 3)
+upper_below3800 <- round(upper_below3800, 3)
+lower_below3800 <- round(lower_below3800, 3)
+
+# Generate summary for sex subgroup
+weight_result <- d %>%
+  filter(!is.na(weight_3800)) %>%
+  group_by(weight_3800) %>%
+  summarise(N_pl = sum(tr == "Placebo"),
+            n_pl = sum(tr == "Placebo" & death == 1),
+            p_pl = percent(n_pl/N_pl, accuracy = .01),
+            N_az = sum(tr == "Azithromycin"),
+            n_az = sum(tr == "Azithromycin" & death == 1),
+            p_az = percent(n_az/N_az, accuracy = .01)
+            ) %>%
+  ungroup() %>%
+  rename(subgroup = weight_3800) %>%
+  bind_cols(data.frame(
+    coef = c(coef_below3800, coef_above3800),     # Add the coefficients for each group
+    ratio = c(hr_below3800, hr_above3800),        # Add the HRs for each group
+    lower_CI = c(lower_below3800, lower_above3800),  # Add the lower CIs for each group
+    upper_CI = c(upper_below3800, upper_above3800)
+  ))
+
+# p value for interaction term
+p_int_w <- round(summary(model_w)$coefficients["trAzithromycin:weight_3800Weight ≥ 3800 g", "Pr(>|z|)"],2)
+
+```
+
+```{r}
+sub_ansys_tab <- bind_rows(
+  agecat_result,
+  childsex_result,
+  vacc_result,
+  weight_result
+) %>% 
+  mutate(ratio = paste0(sprintf("%1.2f",ratio), " (", 
+                     sprintf("%1.2f",lower_CI), " to ", 
+                     sprintf("%1.2f",upper_CI), ")")) %>% 
+  select(-c(coef, lower_CI, upper_CI))
+
+
+# render table
+knitr::kable(sub_ansys_tab, 
+             digits = 2,
+             col.names = c("6-month mortality", "N total", "n outcome", "%", "N total", "n outcome", "%", "HR (95% CI)*"),
+             caption = "Cumulative incidence of 6-month mortality by subgroup and hazard ratio (HR) for comparison between arms."
+      ) %>%
+  pack_rows(paste0("By age at enrollment", " \n P for interaction † = ", p_int_a), 1, 2) %>% 
+  pack_rows(paste0("By child's sex", " \n P for interaction † = ", p_int_s), 3, 4) %>%
+  pack_rows(paste0("By vaccination visit", " \n P for interaction † = ", p_int_v), 5, 6) %>%
+  pack_rows(paste0("By weight", " \n P for interaction † = ", p_int_w), 7, 8) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c(" " = 1,  "Placebo" = 3, "Azithromycin" = 3, " " = 1)) %>%
+  footnote(symbol = c("Hazard Ratio (HR) and 95% confidence interval (CI)",
+                      "P-value for interaction term"))
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
