@@ -59,7 +59,7 @@ For example, in the location on your computer where you would like to clone the 
 
 You can do this by opening the R project file ([CHATON-primary.Rproj](https://github.com/proctor-ucsf/CHATON-primary/blob/main/CHATON-primary.Rproj)) in RStudio, loading the `renv` package, and typing `renv::restore()` to restore the package environment from the projects [renv.lock](https://github.com/proctor-ucsf/CHATON-primary/blob/main/renv.lock) file. 
 
-3. All of the analysis scripts should run smoothly (scripts `1-xx.Rmd` to `11-xx.Rmd`) EXCEPT for `8-CHATON-Trial-Population.Rmd`, which does a quick comparison of population characteristics with the sister trial named CHAT, and relies on a child ID link that is not based on the public IDs.  All other scripts will run smoothly. 
+3. All of the analysis scripts should run smoothly (scripts `1-xx.Rmd` to `11-xx.Rmd`) EXCEPT for `8-CHATON-Trial-Population.Rmd`, which does a quick comparison of population characteristics with the sister trial named CHAT, and relies on a child ID link that is not based on the public IDs.  All other scripts will run smoothly. They will save HTML file output in the /output directory.
 
 ### Installation Guide and Instructions for Use (Docker / RStudio Server)
 
@@ -99,7 +99,7 @@ NOTE: we have not tested the above steps on a Windows or Linux desktop operating
 
 ### Additional details
 
-You can run the `.Rmd` notebook scripts one-by-one or you can compile [`CHATON-primary-run-all.R`](https://github.com/proctor-ucsf/CHATON-primary/blob/main/R/0-CHATON-primary-run-all.R), which is the file we used to run the final analyses (e.g., from the command line `R CMD BATCH CHATON-primary-run-all.R &`).
+You can run the `.Rmd` notebook scripts one-by-one or you can compile [`CHATON-primary-run-all.R`](https://github.com/proctor-ucsf/CHATON-primary/blob/main/R/CHATON-primary-run-all.R), which is the file we used to run the final analyses (e.g., from the command line `R CMD BATCH CHATON-primary-run-all.R &`).
 
 The analyses on the above Mac desktop configuration required 14 minutes to run. 
 
