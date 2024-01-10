@@ -29,11 +29,11 @@ All analyses were run using R software version 4.3.0 on macOS Monterey using the
 
 `> sessionInfo()`
 
-`R version 4.3.2 (2023-10-31)
+`R version 4.3.2 (2023-10-31)`
 
-`Platform: aarch64-apple-darwin20 (64-bit)
+`Platform: aarch64-apple-darwin20 (64-bit)`
 
-`Running under: macOS Monterey 12.6
+`Running under: macOS Monterey 12.6`
 
 (TBD) In this repository we have created a Docker container and have used the `renv` package to archive the package versions so that you and reproduce the exact compute environment on an instance of R Studio Server, should you wish to do so. 
 
@@ -93,7 +93,7 @@ This launches the container and passes (arbitrary) credentials to RStudio Server
 
 4. Navigate to your web browser and go to: `http://localhost:8787`, then enter the USER and PASSWORD specified in the last step to access RStudio Server.
 
-5. You can then run RStudio and the analysis files in a virtual instance of RStudio Server, just as you normally would on your desktop. Analyses will be run on the remote server using Linux-Ubuntu. All of the analysis scripts should run smoothly (scripts `1-xx.Rmd` to `9-xx.Rmd`). 
+5. You can then run RStudio and the analysis files in a virtual instance of RStudio Server, just as you normally would on your desktop. Analyses will be run on the remote server using Linux-Ubuntu. All of the analysis scripts should run smoothly (scripts `1-xx.Rmd` to `11-xx.Rmd`) EXCEPT for `8-CHATON-Trial-Population.Rmd`, which does a quick comparison of population characteristics with the sister trial named CHAT, and relies on a child ID link that is not based on the public IDs.  All other scripts will run smoothly. They will save HTML file output in the /output directory.
 
 NOTE: we have not tested the above steps on a Windows or Linux desktop operating system (only macOS), but they should work similarly.
 
