@@ -318,7 +318,7 @@ null_vec <- foreach(simi = 1:N, .combine = rbind) %dopar% {
 # calculate the 2-sided 
 # permutation test p-value
 #-------------------------------
-p_value <- sum(abs(null_vec) > abs(coef_empir)) / length(null_vec)
+p_value <- sum(abs(null_vec) >= abs(coef_empir)) / length(null_vec)
 
 #-------------------------------
 # plot the null distribution 
