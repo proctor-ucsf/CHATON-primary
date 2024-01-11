@@ -25,7 +25,7 @@ Following: https://www.nature.com/documents/nr-software-policy.pdf
 
 ### System Requirements
 
-All analyses were run using R software version 4.3.0 on macOS Monterey using the RStudio IDE (https://www.rstudio.com).
+All analyses were run using R software version 4.3.2 on macOS Monterey using the RStudio IDE (https://www.rstudio.com).
 
 `> sessionInfo()`
 
@@ -81,29 +81,29 @@ For example, to create an image with the same name as the repository (but docker
 
 `docker build --tag chaton-primary  CHATON-primary/`
 
-This will take about 30 minutes to build the image because it needs to download and install R and all of the relevant package libraries.
+This will take about 25 minutes to build the image because it needs to download and install R and all of the relevant package libraries.
 
 3. Launch an instance of the image on RStudio Server
 
 There are many ways to do this, but one example of this, from the Terminal command line:
 
-`docker run -e USER=ben -e PASSWORD=pass --rm -p 8787:8787 -v /Users/benarnold/CHATON-primary:/home/ben CHATON-primary`
+`docker run -e USER=myname -e PASSWORD=mypass --rm -p 8787:8787 -v /Users/benarnold/CHATON-primary:/home/ben chaton-primary`
 
-This launches the container and passes (arbitrary) credentials to RStudio Server. In this example, the Username is `ben` and the Password is `pass`. These could be anything you like -- you will just need to use them when you open your browser to access RStudio Server (next step)
+This launches the container and passes (arbitrary) credentials to RStudio Server. In this example, the Username is `myname` and the Password is `mypass`. These could be anything you like -- you will just need to use them when you open your browser to access RStudio Server (next step)
 
 4. Navigate to your web browser and go to: `http://localhost:8787`, then enter the USER and PASSWORD specified in the last step to access RStudio Server.
 
-5. You can then run RStudio and the analysis files in a virtual instance of RStudio Server, just as you normally would on your desktop. Analyses will be run on the remote server using Linux-Ubuntu. All of the analysis scripts should run smoothly (scripts `1-xx.Rmd` to `11-xx.Rmd`) EXCEPT for `8-CHATON-Trial-Population.Rmd`, which does a quick comparison of population characteristics with the sister trial named CHAT, and relies on a child ID link that is not based on the public IDs.  All other scripts will run smoothly. They will save HTML file output in the /output directory.
+5. You can then run RStudio and the analysis files in a virtual instance of RStudio Server, just as you normally would on your desktop. Analyses will be run on the remote server using Linux-Ubuntu. All of the analysis scripts should run smoothly (scripts `1-xx.Rmd` to `11-xx.Rmd`) EXCEPT for `8-CHATON-Trial-Population.Rmd`, which does a quick comparison of population characteristics with the sister trial named CHAT, and relies on a child ID link that is not based on the public IDs.  All other scripts will run smoothly. They will save HTML file output in the `/output` directory.
 
-NOTE: we have not tested the above steps on a Windows or Linux desktop operating system (only macOS), but they should work similarly.
+NOTE: we have not tested the above steps on a Windows or Linux desktop operating system (only macOS Intel processors), but they should work similarly. We have not had a successful image build on Apple silicon processors for reasons that seem to be above the pay grade of an academic epidemiologist. If we figure it out, we will update the Dockerfile. 
 
 ### Additional details
 
 You can run the `.Rmd` notebook scripts one-by-one or you can compile [`CHATON-primary-run-all.R`](https://github.com/proctor-ucsf/CHATON-primary/blob/main/R/CHATON-primary-run-all.R), which is the file we used to run the final analyses (e.g., from the command line `R CMD BATCH CHATON-primary-run-all.R &`).
 
-The analyses on the above Mac desktop configuration required 14 minutes to run. 
+The analyses on the above Mac desktop configuration with 8 cores required 14 minutes to run. 
 
-After building an image on RStudio Server, all data processing and analyses also required about 17 minutes to run.
+Running the analysis on RStudio Server required 2 hours 36 minutes to complete.
 
 ### License
 
