@@ -5,7 +5,7 @@ Primary outcome analysis for the CHATON trial
 
 This repository includes R code to run all of the analysis for the paper:
 
-Sie et al. **Azithromycin during Routine Well-Infant Visits to Prevent Death**. (_in press_)
+Sie et al. (2024) Azithromycin during Routine Well-Infant Visits to Prevent Death. _New England Journal of Medicine_ 390:221-229 https://www.nejm.org/doi/full/10.1056/NEJMoa2309495
 
 This work was funded by the Bill & Melinda Gates Foundation (grant OPP1187628), and was registered under clinical trial [NCT03676764](https://clinicaltrials.gov/study/NCT03676764)
 
@@ -17,9 +17,9 @@ Should you have any questions about the files in this repository, please contact
 
 This GitHub repository is mirrored on the Open Science Framework (OSF).  The OSF project page includes additional study-related resources, including the compiled HTML computational notebooks created from the `.Rmd` files, and the final analysis datasets.
 
-[https://osf.io/e6j5a/](https://osf.io/s6h8n/)
+[https://osf.io/s6h8n/](https://osf.io/s6h8n/)
 
-## Software Information
+## Software Informatiohttps://osf.io/s6h8n/n
 
 Following: https://www.nature.com/documents/nr-software-policy.pdf
 
