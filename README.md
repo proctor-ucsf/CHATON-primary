@@ -19,7 +19,7 @@ This GitHub repository is mirrored on the Open Science Framework (OSF).  The OSF
 
 [https://osf.io/s6h8n/](https://osf.io/s6h8n/)
 
-## Software Informatiohttps://osf.io/s6h8n/n
+## Software Information
 
 Following: https://www.nature.com/documents/nr-software-policy.pdf
 
